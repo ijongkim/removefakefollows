@@ -1,0 +1,17 @@
+{
+  "name": "removefakefollows",
+  "version": "1.0.0",
+  "description": "Create CSV list of spam followers with block",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Innie Kim",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^4.0.0",
+    "oauth-percent-encode": "^0.1.2",
+    "twitter": "^1.7.1"
+  }
+}
