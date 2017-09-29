@@ -15,7 +15,7 @@ const client = new Twitter(secrets)
 
 // Parameters sent to request followers, modify as necessary
 const params = {
-  screen_name: 'planamag',
+  screen_name: '',
   stringify_ids: 'true',
   count: '5000',
   cursor: '-1'
@@ -180,5 +180,5 @@ function blockUsers (list) {
   })
 }
 
-// Start the process
+// Start the process, printToFile is default, but replace it with blockUsers if you want to block via API
 getFollowers(params, [], getUserObjects, printToFile)
