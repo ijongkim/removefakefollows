@@ -3,3 +3,5 @@ node_modules/*
 
 # Files to ignore
 .env
+blockList.csv
+log.txt

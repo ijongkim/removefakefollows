@@ -15,17 +15,20 @@ const client = new Twitter(secrets)
 
 // Parameters sent to request followers, modify as necessary
 const params = {
-  screen_name: '',
+  screen_name: 'planamag',
   stringify_ids: 'true',
   count: '5000',
   cursor: '-1'
 }
 
+const resetTime = 3600000 // Time in milliseconds
+
 // If using writing to file, set file path here
 const filePath = 'blockList.csv'
+const logPath = 'log.txt'
 
 function getFollowers (p, list, callback, output) {
-  console.log(`Fetching followers at ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`)
+  console.log(`Fetching followers at ${printTime()}`)
   client.get('followers/ids', p, function (err, res, body) {
     if (!err) {
       // If no error
@@ -41,7 +44,7 @@ function getFollowers (p, list, callback, output) {
         p.cursor = res.next_cursor_str
         if (remain === 0) {
           // About to hit limit, wait until reset time
-          console.log('Hitting limit, waiting', reset, 'seconds...')
+          console.log('About to hit limit, waiting', reset, 'seconds...')
           setTimeout(function () {
             getFollowers(p, list)
           }, reset * 1000)
@@ -54,6 +57,7 @@ function getFollowers (p, list, callback, output) {
       // Else print error with parameters
       console.log('Error:', err)
       console.log('Error:', p)
+      printToLog(logPath, `Error received:\n${err} using parameters:\n${p} on ${printDate()} @ ${printTime()}`)
     }
   })
 }
@@ -86,16 +90,18 @@ function getUserObjects (ids, results, callback) {
           console.log('Blocking', results.length, 'users...')
           callback(results)
         } else {
-          // No IDs to process, run again in 5 min
-          console.log('No fake followers found, running again in 5 minutes')
+          // No IDs to process, run again in specified time
+          console.log(`No fake followers found, running again in ${resetTime / 1000 / 60} minutes`)
+          printToLog(logPath, `No users to block found on ${printDate()} @ ${printTime()}`)
           setTimeout(function () {
             getFollowers(params, [], getUserObjects, printToFile)
-          }, 300000)
+          }, resetTime)
         }
       } else {
         // IDs remaining, keep requesting
         if (remain === 0) {
           // About to hit limit, wait to reset
+          console.log('About to hit limit, waiting', reset, 'seconds...')
           setTimeout(function () {
             getUserObjects(ids, results, callback)
           }, reset * 1000)
@@ -108,6 +114,48 @@ function getUserObjects (ids, results, callback) {
       // Else print error with parameters
       console.log('Error:', err)
       console.log('Error:', p)
+      printToLog(logPath, `Error received:\n${err} using parameters:\n${p} on ${printDate()} @ ${printTime()}`)
+    }
+  })
+}
+
+function blockUsers (list, count) {
+  var c = count || 0
+  c++
+  var user = list.pop()
+  var p = {
+    user_id: user
+  }
+  console.log('Blocking user ID:', p.user_id)
+  client.post('blocks/create', p, function (err, res, body) {
+    if (!err) {
+      var remain = parseInt(body.headers['x-rate-limit-remaining'])
+      var reset = body.headers['x-rate-limit-reset'] - Math.floor(date.getTime() / 1000) + 1
+      if (list.length < 1) {
+        console.log(`Finished blocking at ${printTime()}!\n`)
+        printToLog(logPath, `Blocked ${c} users on ${printDate()} @ ${printTime()}`)
+        // Run again in specified time
+        setTimeout(function () {
+          getFollowers(params, [], getUserObjects, blockUsers)
+        }, resetTime)
+      } else {
+        // IDs remaining, keep blocking
+        if (remain === 0) {
+          // About to hit limit, wait to reset
+          console.log('About to hit limit, waiting', reset, 'seconds...')
+          setTimeout(function () {
+            blockUsers(list)
+          }, reset * 1000)
+        } else {
+          // Else make next request
+          blockUsers(list, c)
+        }
+      }
+    } else {
+      // Else print error with parameters
+      console.log('Error:', err)
+      console.log('Error:', p)
+      printToLog(logPath, `Error received:\n${err} using parameters:\n${p} on ${printDate()} @ ${printTime()}`)
     }
   })
 }
@@ -119,7 +167,7 @@ function isBot (user) {
   var fewStatuses = user.statuses_count < 5
 
   // Put the conditions you want to check against into array
-  var filters = [defaultPic, fewStatuses] // [defaultPic, fewStatuses, fewFollowers] if you want to include users with < 10 followers
+  var filters = [defaultPic, fewFollowers, fewStatuses] // [defaultPic, fewStatuses, fewFollowers] if you want to include users with < 10 followers
 
   // Reduce into a final judgement, currently checks for all conditions to exist
   return filters.reduce(function (acc, i) {
@@ -127,7 +175,7 @@ function isBot (user) {
   }, true)
 }
 
-function printToFile (list) {
+function printToFile (list, count) {
   var wstream = fs.createWriteStream(filePath)
   for (var i = 0; i < list.length; i++) {
     // Iterate through list, print each id on new line
@@ -139,46 +187,29 @@ function printToFile (list) {
     }
   }
   wstream.end()
-  console.log(`Finished writing at ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}!\n`)
-  // Run again in 5 min
+  console.log(`Finished writing at ${printTime()}!\n`)
+  printToLog(logPath, `Wrote ${list.length} users in ${filePath} on ${printDate()} @ ${printTime()}`)
+  // Run again in specified time
   setTimeout(function () {
     getFollowers(params, [], getUserObjects, printToFile)
-  }, 300000)
+  }, resetTime)
 }
 
-function blockUsers (list) {
-  var p = {
-    user_id: list.pop().id_str
-  }
-  client.post('blocks/create', p, function (err, res, body) {
-    if (!err) {
-      var remain = parseInt(body.headers['x-rate-limit-remaining'])
-      var reset = body.headers['x-rate-limit-reset'] - Math.floor(date.getTime() / 1000) + 1
-      if (list.length < 1) {
-        console.log(`Finished blocking at ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}!\n`)
-        // Run again in 5 min
-        setTimeout(function () {
-          getFollowers(params, [], getUserObjects, blockUsers)
-        }, 300000)
-      } else {
-        // IDs remaining, keep blocking
-        if (remain === 0) {
-          // About to hit limit, wait to reset
-          setTimeout(function () {
-            blockUsers(list)
-          }, reset * 1000)
-        } else {
-          // Else make next request
-          blockUsers(list)
-        }
-      }
-    } else {
-      // Else print error with parameters
-      console.log('Error:', err)
-      console.log('Error:', p)
-    }
+function printToLog (file, contents) {
+  contents += '\n'
+  fs.appendFile(file, contents, function (err) {
+    if (err) throw err
+    console.log('Results logged.')
   })
 }
 
+function printDate () {
+  return `${date.getMonth()} ${date.getDate()}, ${date.getYear()}`
+}
+
+function printTime () {
+  return `${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`
+}
+
 // Start the process, printToFile is default, but replace it with blockUsers if you want to block via API
-getFollowers(params, [], getUserObjects, printToFile)
+getFollowers(params, [], getUserObjects, blockUsers)
