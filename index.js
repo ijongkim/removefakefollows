@@ -1,7 +1,6 @@
 const dotenv = require('dotenv').config()
 const fs = require('fs')
 const Twitter = require('twitter')
-const date = new Date()
 
 // All keys and secrets should be in .env file
 const secrets = {
@@ -21,20 +20,54 @@ const params = {
   cursor: '-1'
 }
 
-const resetTime = 3600000 // Time in milliseconds
+/*
+  OPTIONS
+  Set desired options here
+*/
 
-// If using writing to file, set file path here
+// If writing to files, set file paths
 const filePath = 'blockList.csv'
 const logPath = 'log.txt'
 
+// Set desired last step. You can either block the user via API or output a CSV file
+const outputFunction = blockUsers // printToFile should be used if a CSV file is desired
+const resetTime = 3600000 // Time in milliseconds until process should restart
+
+/*
+  Any changes to the criteria used to determine whether to block a user or not should go here
+  Add another variable, reference the appropriate property according to Twitter's API reference
+  then add the new variable name to the filters array
+  Currently checks if ALL conditions are true. If you want to change to ANY, you will need to
+  replace && with || on line 50 and true with false on line 51
+*/
+
+function isBot (user) {
+  // Define conditions here
+  var defaultPic = user.profile_image_url === 'http://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png'
+  var fewFollowers = user.followers_count < 10
+  var fewStatuses = user.statuses_count < 5
+
+  // Put the conditions you want to check against into array
+  var filters = [defaultPic, fewFollowers, fewStatuses]
+
+  // Reduce into a final judgement
+  return filters.reduce(function (acc, i) {
+    return acc && i
+  }, true)
+}
+
+/*
+  No changes to code below are necessary
+*/
+
 function getFollowers (p, list, callback, output) {
-  console.log(`Fetching followers at ${printTime()}`)
+  console.log(`Fetching followers at ${printDateAndTime(false, true)}`)
   client.get('followers/ids', p, function (err, res, body) {
     if (!err) {
       // If no error
       list = list.concat(res.ids)
       var remain = parseInt(body.headers['x-rate-limit-remaining'])
-      var reset = body.headers['x-rate-limit-reset'] - Math.floor(date.getTime() / 1000) + 1
+      var reset = body.headers['x-rate-limit-reset'] - Math.floor(Date.now() / 1000) + 1
       if (res.next_cursor_str === '0') {
         // If last page of results, send list of ids to callback
         console.log('Found', list.length, 'users...')
@@ -57,7 +90,7 @@ function getFollowers (p, list, callback, output) {
       // Else print error with parameters
       console.log('Error:', err)
       console.log('Error:', p)
-      printToLog(logPath, `Error received:\n${err} using parameters:\n${p} on ${printDate()} @ ${printTime()}`)
+      printToLog(logPath, `Error received:\n${err} using parameters:\n${p}`)
     }
   })
 }
@@ -82,7 +115,7 @@ function getUserObjects (ids, results, callback) {
       })
       results = results.concat(filtered)
       var remain = parseInt(body.headers['x-rate-limit-remaining'])
-      var reset = body.headers['x-rate-limit-reset'] - Math.floor(date.getTime() / 1000) + 1
+      var reset = body.headers['x-rate-limit-reset'] - Math.floor(Date.now() / 1000) + 1
       if (ids.length < 1) {
         // All IDs requested, send list of ids to callback
         if (results.length > 0) {
@@ -92,7 +125,7 @@ function getUserObjects (ids, results, callback) {
         } else {
           // No IDs to process, run again in specified time
           console.log(`No fake followers found, running again in ${resetTime / 1000 / 60} minutes`)
-          printToLog(logPath, `No users to block found on ${printDate()} @ ${printTime()}`)
+          printToLog(logPath, `No users to block found`)
           setTimeout(function () {
             getFollowers(params, [], getUserObjects, printToFile)
           }, resetTime)
@@ -114,7 +147,7 @@ function getUserObjects (ids, results, callback) {
       // Else print error with parameters
       console.log('Error:', err)
       console.log('Error:', p)
-      printToLog(logPath, `Error received:\n${err} using parameters:\n${p} on ${printDate()} @ ${printTime()}`)
+      printToLog(logPath, `Error received:\n${err} using parameters:\n${p}`)
     }
   })
 }
@@ -130,10 +163,10 @@ function blockUsers (list, count) {
   client.post('blocks/create', p, function (err, res, body) {
     if (!err) {
       var remain = parseInt(body.headers['x-rate-limit-remaining'])
-      var reset = body.headers['x-rate-limit-reset'] - Math.floor(date.getTime() / 1000) + 1
+      var reset = body.headers['x-rate-limit-reset'] - Math.floor(Date.now() / 1000) + 1
       if (list.length < 1) {
-        console.log(`Finished blocking at ${printTime()}!\n`)
-        printToLog(logPath, `Blocked ${c} users on ${printDate()} @ ${printTime()}`)
+        console.log(`Finished blocking at ${printDateAndTime(false, true)}!\n`)
+        printToLog(logPath, `Blocked ${c} users`)
         // Run again in specified time
         setTimeout(function () {
           getFollowers(params, [], getUserObjects, blockUsers)
@@ -155,24 +188,9 @@ function blockUsers (list, count) {
       // Else print error with parameters
       console.log('Error:', err)
       console.log('Error:', p)
-      printToLog(logPath, `Error received:\n${err} using parameters:\n${p} on ${printDate()} @ ${printTime()}`)
+      printToLog(logPath, `Error received:\n${err} using parameters:\n${p}`)
     }
   })
-}
-
-function isBot (user) {
-  // Define conditions here
-  var defaultPic = user.profile_image_url === 'http://abs.twimg.com/sticky/default_profile_images/default_profile_normal.png'
-  var fewFollowers = user.followers_count < 10
-  var fewStatuses = user.statuses_count < 5
-
-  // Put the conditions you want to check against into array
-  var filters = [defaultPic, fewFollowers, fewStatuses] // [defaultPic, fewStatuses, fewFollowers] if you want to include users with < 10 followers
-
-  // Reduce into a final judgement, currently checks for all conditions to exist
-  return filters.reduce(function (acc, i) {
-    return acc && i
-  }, true)
 }
 
 function printToFile (list, count) {
@@ -187,8 +205,8 @@ function printToFile (list, count) {
     }
   }
   wstream.end()
-  console.log(`Finished writing at ${printTime()}!\n`)
-  printToLog(logPath, `Wrote ${list.length} users in ${filePath} on ${printDate()} @ ${printTime()}`)
+  console.log(`Finished writing at ${printDateAndTime(false, true)}!\n`)
+  printToLog(logPath, `Wrote ${list.length} users in ${filePath}`)
   // Run again in specified time
   setTimeout(function () {
     getFollowers(params, [], getUserObjects, printToFile)
@@ -196,20 +214,34 @@ function printToFile (list, count) {
 }
 
 function printToLog (file, contents) {
-  contents += '\n'
+  contents = contents + ` on ${printDateAndTime(true, true)}\n`
   fs.appendFile(file, contents, function (err) {
     if (err) throw err
     console.log('Results logged.')
   })
 }
 
-function printDate () {
-  return `${date.getMonth()} ${date.getDate()}, ${date.getYear()}`
+function printDateAndTime (printDate, printTime) {
+  let current = new Date()
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  let month = months[current.getMonth()]
+  let date = addZero(current.getDate())
+  let year = current.getYear() + 1900
+  let hours = addZero(current.getHours())
+  let min = addZero(current.getMinutes())
+  let sec = addZero(current.getSeconds())
+  if (printDate && printTime) {
+    return `${month} ${date}, ${year} @ ${hours}:${min}:${sec}`
+  } else if (printTime) {
+    return `${hours}:${min}:${sec}`
+  } else {
+    return `${month} ${date}, ${year}`
+  }
 }
 
-function printTime () {
-  return `${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`
+function addZero (num) {
+  return num < 10 ? ('0' + num) : num
 }
 
-// Start the process, printToFile is default, but replace it with blockUsers if you want to block via API
-getFollowers(params, [], getUserObjects, blockUsers)
+// Start the process
+getFollowers(params, [], getUserObjects, outputFunction)
