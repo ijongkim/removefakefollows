@@ -7,6 +7,10 @@
 4) Set options in `index.js`
 5) Run `npm start` to start the program
 
-If you choose to block users via API no file will be created
+Blocking unwanted users is the default behavior, no file will be created if this option is selected. Alternatively, if you'd rather use Twitter's importing functions, the appropriate output function should be set in the options of `index.js`. 
 
-If you print to file, a file will be created and it will be overwritten if it already exists. You must take this list to your Account Settings and import the list of ids to block manually.
+I recommend importing CSVs if you expect to block more than 1k users at a given time.
+
+If you print to file, a file will be created if it does not yet exists and will be overwrite the file if it does. You must take this list to your Account Settings and import the list of ids to block manually.
+
+Currently users with a default profile picture, less than 10 followers, and less than 5 tweets are considered fake. If you would like to use a different set of parameters, modify the `isBot` function in `index.js`.

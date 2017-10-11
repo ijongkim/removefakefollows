@@ -14,7 +14,7 @@ const client = new Twitter(secrets)
 
 // Parameters sent to request followers, modify as necessary
 const params = {
-  screen_name: 'planamag',
+  screen_name: '',
   stringify_ids: 'true',
   count: '5000',
   cursor: '-1'
@@ -31,7 +31,7 @@ const logPath = 'log.txt'
 
 // Set desired last step. You can either block the user via API or output a CSV file
 const outputFunction = blockUsers // printToFile should be used if a CSV file is desired
-const resetTime = 3600000 // Time in milliseconds until process should restart
+const resetTime = 3600000 // Time in milliseconds until process should restart, currently set to 60 min
 
 /*
   Any changes to the criteria used to determine whether to block a user or not should go here
